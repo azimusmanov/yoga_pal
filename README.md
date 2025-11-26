@@ -1,0 +1,119 @@
+# Real-time Yoga Pose Detection
+
+A real-time yoga pose estimation and feedback system using webcam, MediaPipe, and machine learning.
+
+## Features
+
+- **Real-time pose detection** from webcam feed
+- **Pose classification** for 4 yoga poses: Tree, Lunge, Cobra, Downward Dog
+- **Live feedback** on pose form with specific corrections
+- **Joint angle visualization** for debugging
+- **Sliding window smoothing** for stable predictions
+- **Mirror mode** for intuitive practice
+
+## Setup
+
+### 1. Install Dependencies
+
+Make sure you have Python 3.8+ installed, then run:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Ensure Model File Exists
+
+The script requires `yoga_pose_model.pkl` to be in the same directory. This file should be generated from your notebook's training section.
+
+If you haven't created it yet, run the model training cells in your notebook (cells 28-29) to generate it.
+
+### 3. Run the Script
+
+```bash
+python realtime_yoga_pose.py 
+or
+python3 realtime_yoga_pose.py 
+```
+
+## Usage
+
+Once the script is running:
+
+1. **Position yourself** so your full body is visible in the webcam
+2. **Hold a yoga pose** for 1 second (the buffering period)
+3. **View feedback** displayed on screen:
+   - Green text = Good form
+   - Red text = Needs adjustment
+4. **Check joint angles** displayed on the left side (grayed out = low visibility)
+
+### Keyboard Controls
+
+- **`q`** - Quit the application
+- **`s`** - Save a screenshot of the current frame
+
+## Supported Poses
+
+### 1. Tree Pose
+- Bent knee: 30-85°
+- Standing leg: 165-185° (straight)
+
+### 2. Lunge
+- Front knee: 75-110° (bent at ~90°)
+- Back leg: 160-185° (straight)
+
+### 3. Cobra Pose
+- Back arch: 90-145°
+- Arms: 150-185° (mostly straight)
+
+### 4. Downward Dog
+- Legs: 160-185° (straight)
+- Hips: 40-110° (bent)
+- Arms: 140-185° (straight)
+- Chest: 135-195°
+
+## Troubleshooting
+
+### Camera not opening
+- Make sure no other application is using the webcam
+- Try changing camera index in code: `cv2.VideoCapture(0)` → `cv2.VideoCapture(1)`
+
+### Low accuracy
+- Ensure full body is visible in frame
+- Good lighting helps MediaPipe detect landmarks
+- Hold poses still for at least 1 second
+- Adjust `CONFIDENCE_THRESH` in the script (default: 0.65)
+
+### Slow performance
+- Reduce MediaPipe model complexity: change `model_complexity=1` to `model_complexity=0` (line 30)
+- Reduce window size: `WINDOW_SECONDS = 0.5` (line 17)
+
+## Configuration
+
+You can adjust these parameters at the top of `realtime_yoga_pose.py`:
+
+```python
+CONFIDENCE_THRESH = 0.65  # Prediction confidence threshold (0.0-1.0)
+WINDOW_SECONDS = 1        # Sliding window duration in seconds
+MODEL_PATH = 'yoga_pose_model.pkl'  # Path to trained model
+```
+
+## How It Works
+
+1. **Capture**: Grabs frames from webcam at ~30 FPS
+2. **Detection**: MediaPipe extracts 33 body keypoints
+3. **Feature Extraction**: Calculates 8 joint angles from keypoints
+4. **Smoothing**: Averages angles over a 1-second sliding window
+5. **Classification**: Random Forest model predicts pose
+6. **Feedback**: Rule-based system checks angle ranges and provides tips
+7. **Display**: Overlays skeleton, pose name, confidence, and feedback
+
+## Next Steps
+
+To create a web interface:
+1. Run `flask_yoga_app.py` (if created) to host on localhost
+2. Access via browser at `http://localhost:5000`
+3. Cleaner UI with better mobile support
+
+---
+
+**Note**: This script uses a mirror view (horizontally flipped) for more intuitive practice. Your right side appears on the right side of the screen.

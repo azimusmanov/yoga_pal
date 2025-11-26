@@ -1,0 +1,7 @@
+# ignore activites videos (for our privacy)
+Activities
+
+# virtual envs
+venv
+venv312
+*.csv
