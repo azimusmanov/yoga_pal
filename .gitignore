@@ -6,3 +6,6 @@ venv
 .venv
 venv312
 *.csv
+
+
+__pycache__
