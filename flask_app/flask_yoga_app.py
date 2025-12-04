@@ -39,6 +39,7 @@ try:
         extract_features_single_frame,
         reconstruct_angles,
         get_feedback,
+        get_feedback_with_details,
         feedback_rules
     )
     print("Imported functions from realtime_yoga_pose.py")
@@ -72,6 +73,18 @@ else:
 # Initialize MediaPipe utilities
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
+
+# Mapping from our angle feature names to MediaPipe 2D landmark indices
+ANGLE_TO_LANDMARK = {
+    'left_knee_angle': mp_pose.PoseLandmark.LEFT_KNEE.value,
+    'right_knee_angle': mp_pose.PoseLandmark.RIGHT_KNEE.value,
+    'left_elbow_angle': mp_pose.PoseLandmark.LEFT_ELBOW.value,
+    'right_elbow_angle': mp_pose.PoseLandmark.RIGHT_ELBOW.value,
+    'left_hip_angle': mp_pose.PoseLandmark.LEFT_HIP.value,
+    'right_hip_angle': mp_pose.PoseLandmark.RIGHT_HIP.value,
+    'left_shoulder_angle': mp_pose.PoseLandmark.LEFT_SHOULDER.value,
+    'right_shoulder_angle': mp_pose.PoseLandmark.RIGHT_SHOULDER.value,
+}
 
 # Store sliding windows per client (using session ID)
 client_buffers = {}
@@ -147,7 +160,8 @@ def process_frame():
             'feedback_text': '',
             'confidence': 0.0,
             'angles': {},
-            'has_pose': False
+            'has_pose': False,
+            'highlight_joints': []
         }
         
         # Process with MediaPipe (image_rgb is already RGB from PIL)
@@ -259,12 +273,34 @@ def process_frame():
                     # avg_vis already computed above
                     
                     avg_angles_dict = reconstruct_angles(avg_vec)
+
+                    # Get pose-specific feedback, plus which angle(s) triggered it
+                    feedback_text, offending_angles = get_feedback_with_details(
+                        pred_label, avg_angles_dict, avg_vis
+                    )
                     
                     # Get pose-specific feedback
                     feedback_text = get_feedback(buffer['current_label'], avg_angles_dict, avg_vis)
                     response['feedback_text'] = feedback_text
                     response['angles'] = {k: float(v) for k, v in avg_angles_dict.items()}
                     response['visibility'] = avg_vis
+
+                    # Compute highlight joints (in 2D normalized coords) for frontend arrows
+                    highlight_joints = []
+                    if hasattr(results, 'pose_landmarks') and results.pose_landmarks:
+                        lm2d = results.pose_landmarks.landmark
+                        for ang_name in offending_angles:
+                            lm_idx = ANGLE_TO_LANDMARK.get(ang_name)
+                            if lm_idx is None or lm_idx >= len(lm2d):
+                                continue
+                            joint = lm2d[lm_idx]
+                            highlight_joints.append({
+                                'name': ang_name,
+                                'x': float(joint.x),
+                                'y': float(joint.y),
+                            })
+
+                    response['highlight_joints'] = highlight_joints
 
                     # Session tracking (optimized - minimal overhead)
                     # Only count a "rep" when pose changes, not on every frame

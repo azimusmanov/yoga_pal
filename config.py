@@ -11,7 +11,7 @@ WINDOW_SECONDS = 1.5               # Sliding window duration in seconds
 
 # Resolve model path relative to the repository root (this config file's location)
 _ROOT = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(_ROOT, 'models', 'yoga_pose_model0.pkl')
+MODEL_PATH = os.path.join(_ROOT, 'models', 'yoga_pose_model_new.pkl')
 
 # Temporal filtering
 EMA_ALPHA = 0.2                    # EMA smoothing factor for probabilities (higher = smoother, slower to react)
