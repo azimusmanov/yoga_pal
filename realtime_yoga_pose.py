@@ -406,7 +406,9 @@ def run_realtime_pose_detection():
                                     current_label = pred_label
                                     stable_frames = 0  # reset counter after switch
 
-                        pose_text = f"{current_label} ({int(confidence * 100)}%)"
+                        # Map model label 'Lunge' to display label 'Warrior Pose'
+                        display_label = 'Warrior Pose' if current_label == 'Lunge' else current_label
+                        pose_text = f"{display_label} ({int(confidence * 100)}%)"
 
                         # Calculate average visibility
                         for key in vis:

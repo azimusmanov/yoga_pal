@@ -235,7 +235,9 @@ def process_frame():
                                 buffer['current_label'] = pred_label
                                 buffer['stable_frames'] = 0
 
-                    response['pose_text'] = f"{buffer['current_label']}"
+                    # Map model label 'Lunge' to display label 'Warrior Pose'
+                    display_label = 'Warrior Pose' if buffer['current_label'] == 'Lunge' else buffer['current_label']
+                    response['pose_text'] = f"{display_label}"
                     response['confidence'] = confidence
                     response['has_pose'] = True
                     
