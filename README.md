@@ -28,9 +28,10 @@ pip install -r requirements.txt
 
 ### 2. Ensure Model File Exists
 
-The script requires `yoga_pose_model.pkl` to be in the same directory. This file should be generated from the notebook's training section.
+The app expects the trained model under `models/`.
 
-If it is not included, run the model training cells in the .ipynb notebook (up to cells 28-29) to generate it.
+- Default path: `models/yoga_pose_model0.pkl` (configured in `config.py`).
+- If it is not included, run the training notebook in `models/` to generate it.
 
 ### 3. Run the Application
 
@@ -38,7 +39,7 @@ You can run the application in two ways:
 
 #### Option A: Web Interface (Recommended)
 
-Run the Flask web app:
+Run the Flask web app (files are under `flask_app/`):
 
 ```bash
 python flask_yoga_app.py
@@ -117,7 +118,7 @@ Once the script is running:
 
 ## Configuration
 
-You can adjust these parameters in `config.py` (shared by both apps):
+You can adjust these parameters in `config.py` (shared by both apps). Model files live in `models/`, and Flask code lives in `flask_app/`:
 
 ```python
 CONFIDENCE_THRESH = 0.60

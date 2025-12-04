@@ -3,10 +3,15 @@ Shared configuration for Yoga Pose Detection.
 Edit these values to tune behavior across both desktop and web apps.
 """
 
+import os
+
 # Core runtime parameters
 CONFIDENCE_THRESH = 0.60           # Prediction confidence threshold (0.0-1.0)
 WINDOW_SECONDS = 1.5               # Sliding window duration in seconds
-MODEL_PATH = 'yoga_pose_model0.pkl'  # Path to trained model file
+
+# Resolve model path relative to the repository root (this config file's location)
+_ROOT = os.path.dirname(__file__)
+MODEL_PATH = os.path.join(_ROOT, 'models', 'yoga_pose_model0.pkl')
 
 # Temporal filtering
 EMA_ALPHA = 0.2                    # EMA smoothing factor for probabilities (higher = smoother, slower to react)

@@ -19,6 +19,11 @@ from PIL import Image
 
 # Import functions and constants from azim's script (realtime_yoga_pose.py)
 # suppress exit() calls that happen during import if model file doesn't exist
+# Ensure repo root is on the import path so we can import modules from parent directory
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
 try:
     # temp replace sys.exit to prevent import from killing Flask app because realtime_yoga_pose.py calls exit(1) if model file doesn't exist
     original_exit = sys.exit
