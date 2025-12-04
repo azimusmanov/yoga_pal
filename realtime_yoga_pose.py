@@ -38,10 +38,13 @@ mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(
     static_image_mode=False, 
     model_complexity=1,  # 0=Lite, 1=Full, 2=Heavy (use 1 for balance)
-    min_detection_confidence=0.5, 
+    min_detection_confidence=0.5,
     min_tracking_confidence=0.5
 )
 mp_drawing = mp.solutions.drawing_utils
+
+
+
 
 # Feedback rules for each pose
 feedback_rules = {
@@ -159,10 +162,13 @@ def reconstruct_angles(feature_vector):
     }
 
 
-def get_feedback(pose_name, angles_dict, vis_dict):
-    """Generate feedback based on pose-specific rules"""
+def _get_feedback_core(pose_name, angles_dict, vis_dict):
+    """
+    Core feedback logic used by both CLI app and Flask app.
+    Returns (message, list_of_angle_keys_that_triggered_message).
+    """
     if pose_name not in feedback_rules:
-        return ""
+        return "", []
     
     rules = feedback_rules[pose_name]
     l_knee = angles_dict['left_knee_angle']
@@ -192,7 +198,7 @@ def get_feedback(pose_name, angles_dict, vis_dict):
         mapping['back'] = ['left_hip_angle', 'right_hip_angle']
         mapping['arms'] = ['left_elbow_angle', 'right_elbow_angle']
 
-    visual_thresh = 0.85 # prev 0.7
+    visual_thresh = 0.85  # prev 0.7
 
     # Check each rule
     for rule_part, (min_v, max_v, msg) in rules.items():
@@ -209,9 +215,90 @@ def get_feedback(pose_name, angles_dict, vis_dict):
             
             val = angles_dict.get(name, 0)
             if val < min_v or val > max_v:
-                return msg
+                # Return first offending joint(s) for this rule
+                return msg, [name]
 
-    return "Good job!"
+    return "Good job!", []
+
+
+def get_feedback(pose_name, angles_dict, vis_dict):
+    """
+    Backwards-compatible wrapper for existing callers.
+    Returns just the feedback message.
+    """
+    msg, _ = _get_feedback_core(pose_name, angles_dict, vis_dict)
+    return msg
+
+
+def get_feedback_with_details(pose_name, angles_dict, vis_dict):
+    """
+    Extended API used by the Flask app.
+    Returns (message, list_of_angle_keys_that_triggered_message).
+    """
+    return _get_feedback_core(pose_name, angles_dict, vis_dict)
+
+
+def draw_ideal_pose_overlay(frame, pose_name, pose_landmarks_2d):
+    """
+    Draw a semi-transparent 'ideal' skeleton for the given pose_name
+    aligned to the user's hip position and scale.
+    """
+    if pose_name not in CANONICAL_POSES:
+        return
+
+    if pose_landmarks_2d is None:
+        return
+
+    height, width = frame.shape[:2]
+    try:
+        l_hip = pose_landmarks_2d[L_HIP]
+        r_hip = pose_landmarks_2d[R_HIP]
+    except IndexError:
+        return
+
+    # User hip center (in normalized coordinates)
+    user_root = np.array([(l_hip.x + r_hip.x) / 2.0,
+                          (l_hip.y + r_hip.y) / 2.0],
+                         dtype=np.float32)
+    # Use hip distance as scale proxy
+    hip_vec = np.array([l_hip.x - r_hip.x, l_hip.y - r_hip.y], dtype=np.float32)
+    hip_dist = np.linalg.norm(hip_vec)
+    if hip_dist < 1e-4:
+        return
+
+    # Slightly enlarge ideal skeleton relative to hip distance so it is clearly visible
+    scale = hip_dist * 2.0
+
+    canon = CANONICAL_POSES[pose_name]
+
+    # Map canonical joints into image space
+    mapped = {}
+    for idx, offset in canon.items():
+        pt_norm = user_root + offset * scale
+        x = int(pt_norm[0] * width)
+        y = int(pt_norm[1] * height)
+        mapped[idx] = (x, y)
+
+    # Draw on separate overlay for transparency
+    overlay = frame.copy()
+    color = (255, 255, 0)  # yellow ideal skeleton
+    thickness = 3
+
+    # Draw connections where both endpoints exist in canonical pose
+    for conn in mp_pose.POSE_CONNECTIONS:
+        i, j = conn
+        i_idx = i.value if hasattr(i, "value") else int(i)
+        j_idx = j.value if hasattr(j, "value") else int(j)
+        if i_idx in mapped and j_idx in mapped:
+            cv2.line(overlay, mapped[i_idx], mapped[j_idx], color, thickness)
+
+    # Draw joints
+    for pt in mapped.values():
+        cv2.circle(overlay, pt, 6, color, -1)
+
+    # Blend overlay onto original frame
+    alpha = 0.35
+    cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
 
 def body_fully_visible(vis_dict, required_keys=None, thresh=BODY_VIS_THRESH):
@@ -349,7 +436,7 @@ def run_realtime_pose_detection():
                 if results.pose_landmarks:
                     mp_drawing.draw_landmarks(
                         frame, 
-                        results.pose_landmarks, 
+                        results.pose_landmarks,
                         mp_pose.POSE_CONNECTIONS,
                         mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
                         mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2)
@@ -450,6 +537,14 @@ def run_realtime_pose_detection():
                 else:
                     # Still filling buffer
                     pose_text = f"Buffering... ({len(feature_buffer)}/{buffer_size})"
+
+                # Draw ideal pose overlay when we have a confident prediction
+                if pred_label and confidence > CONFIDENCE_THRESH and results.pose_landmarks:
+                    draw_ideal_pose_overlay(
+                        frame,
+                        pred_label,
+                        results.pose_landmarks.landmark
+                    )
 
             # Draw UI overlay
             # Top black bar for pose and feedback

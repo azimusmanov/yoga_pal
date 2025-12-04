@@ -11,6 +11,7 @@ let frameCount = 0;
 let lastTime = Date.now();
 let isProcessingFrame = false; // ensure only one in-flight request at a time
 let sessionActive = false;
+let lastHighlightJoints = []; // persisted between frames so arrows stay visible and can be smoothed
 
 // DOM elements
 const startSessionBtn = document.getElementById('start-session-btn');
@@ -173,6 +174,11 @@ function captureAndProcess() {
     // Draw video frame to canvas (no flip - let CSS handle mirror display)
     // This ensures MediaPipe processes the same orientation as desktop app
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Draw any existing highlight arrows on top of the current frame
+    if (lastHighlightJoints && lastHighlightJoints.length) {
+        drawHighlightJoints(lastHighlightJoints);
+    }
     
     // Convert canvas to base64 - use 0.7 quality for good balance
     const imageData = canvas.toDataURL('image/jpeg', 0.7);
@@ -197,6 +203,9 @@ function captureAndProcess() {
         } else {
             // Update UI with results
             updateUI(data);
+
+            // Update stored visual guidance (e.g., joints needing correction) with smoothing
+            updateHighlightJoints(data.highlight_joints || []);
         }
     })
     .catch(error => {
@@ -240,6 +249,111 @@ function updateUI(data) {
     } else {
         anglesPanel.style.display = 'none';
     }
+}
+
+function updateHighlightJoints(newJoints) {
+    if (!canvas || !ctx) {
+        lastHighlightJoints = [];
+        return;
+    }
+
+    // If no joints are highlighted this frame, clear highlights
+    if (!newJoints || !newJoints.length) {
+        lastHighlightJoints = [];
+        return;
+    }
+
+    const alpha = 0.3;          // smoothing factor (0 = keep old, 1 = jump to new)
+    const snapRadiusPx = 25;    // within this radius, keep the old anchored position
+
+    const updated = newJoints.map(joint => {
+        const prev = lastHighlightJoints.find(p => p.name === joint.name);
+        if (!prev) {
+            // No previous point for this joint; use the new one directly
+            return { ...joint };
+        }
+
+        const prevXpx = prev.x * canvas.width;
+        const prevYpx = prev.y * canvas.height;
+        const newXpx = joint.x * canvas.width;
+        const newYpx = joint.y * canvas.height;
+
+        const dx = newXpx - prevXpx;
+        const dy = newYpx - prevYpx;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // If the new point is very close, "snap" to the old position (anchor)
+        if (dist < snapRadiusPx) {
+            return { ...prev };
+        }
+
+        // Otherwise, do a smoothed transition between old and new
+        const smoothedX = alpha * joint.x + (1 - alpha) * prev.x;
+        const smoothedY = alpha * joint.y + (1 - alpha) * prev.y;
+
+        return {
+            name: joint.name,
+            x: smoothedX,
+            y: smoothedY,
+        };
+    });
+
+    lastHighlightJoints = updated;
+}
+
+function drawHighlightJoints(highlightJoints) {
+    if (!canvas || !ctx) return;
+    if (!highlightJoints || !highlightJoints.length) return;
+
+    // Draw arrows/circles pointing at the highlighted joints on top of current frame
+    ctx.save();
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(248, 113, 113, 0.95)'; // softer red
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.7)';
+    ctx.shadowBlur = 12;
+
+    highlightJoints.forEach(joint => {
+        const x = joint.x * canvas.width;
+        const y = joint.y * canvas.height;
+
+        // Draw a short arrow pointing down to the joint from above
+        const arrowLength = 45;
+        const startX = x;
+        const startY = y - arrowLength;
+        const endX = x;
+        const endY = y;
+
+        // Arrow shaft
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+
+        // Arrowhead
+        const headSize = 10;
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(endX - headSize, endY - headSize);
+        ctx.lineTo(endX + headSize, endY - headSize);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glow circle around the joint for better anchoring perception
+        const outerRadius = 14;
+        ctx.beginPath();
+        ctx.arc(x, y, outerRadius, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Solid inner circle at the joint
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+
+    ctx.restore();
 }
 
 function displayAngles(angles, visibility) {
@@ -315,7 +429,7 @@ function renderSessionSummary(summary) {
                 const ul = document.createElement('ul');
                 messages.forEach(m => {
                     const li = document.createElement('li');
-                    li.textContent = `${m.message} (${m.count}x)`;
+                    li.textContent = `${m.message}`;
                     ul.appendChild(li);
                 });
                 section.appendChild(ul);
