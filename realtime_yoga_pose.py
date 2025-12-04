@@ -215,16 +215,24 @@ def get_feedback(pose_name, angles_dict, vis_dict):
 
 
 def body_fully_visible(vis_dict, required_keys=None, thresh=BODY_VIS_THRESH):
-    """Return True if the required joints have sufficient visibility."""
+    """Return True if the required joints have sufficient visibility.
+    Default: lower-body only. Only requires ONE SIDE to be visible (either left or right).
+    For ground poses, one side can be occluded by the other.
+    """
     if not vis_dict:
         return False
     if required_keys is None:
-        # Use joints we track visibility for
-        required_keys = [
-            'left_shoulder_angle', 'right_shoulder_angle',
-            'left_hip_angle', 'right_hip_angle',
-            'left_knee_angle', 'right_knee_angle',
-        ]
+        # Evaluate by pairs: hips and knees. At least one hip and one knee must exceed threshold.
+        left_hip = vis_dict.get('left_hip_angle', 0.0)
+        right_hip = vis_dict.get('right_hip_angle', 0.0)
+        left_knee = vis_dict.get('left_knee_angle', 0.0)
+        right_knee = vis_dict.get('right_knee_angle', 0.0)
+
+        hip_ok = (left_hip >= thresh) or (right_hip >= thresh)
+        knee_ok = (left_knee >= thresh) or (right_knee >= thresh)
+        return hip_ok and knee_ok
+
+    # If a custom set was provided, fall back to strict all-of requirement
     for k in required_keys:
         if vis_dict.get(k, 0.0) < thresh:
             return False
@@ -363,6 +371,16 @@ def run_realtime_pose_detection():
                     for key in vis:
                         avg_vis[key] = np.mean([v[key] for v in vis_buffer])
                 vis_ok = current_vis_ok or (avg_vis and body_fully_visible(avg_vis))
+                # If still not ok and we're likely in a ground pose, try a looser threshold
+                # Ground poses: DownwardDog, Cobra often have lower shoulder visibility
+                if not vis_ok:
+                    # Use smoothed_probs or last known label to infer likely pose
+                    likely_label = current_label
+                    if smoothed_probs is not None:
+                        likely_label = model.classes_[int(np.argmax(smoothed_probs))]
+                    if likely_label in ('DownwardDog', 'Cobra'):
+                        loose_thresh = max(0.5, BODY_VIS_THRESH - 0.2)
+                        vis_ok = body_fully_visible(avg_vis or vis, thresh=loose_thresh)
 
                 # Once buffer is full, make predictions
                 if len(feature_buffer) == buffer_size and vis_ok:
@@ -428,7 +446,7 @@ def run_realtime_pose_detection():
                 elif len(feature_buffer) == buffer_size and not vis_ok:
                     # Insufficient body visibility; instruct user
                     pose_text = "Please put whole body in frame"
-                    feedback_text = "Make sure shoulders, hips, and knees are visible"
+                    feedback_text = "Make sure hips and knees are clearly visible"
                 else:
                     # Still filling buffer
                     pose_text = f"Buffering... ({len(feature_buffer)}/{buffer_size})"

@@ -185,17 +185,32 @@ def process_frame():
                 if not vis_dict:
                     return False
                 if required_keys is None:
-                    required_keys = [
-                        'left_shoulder_angle', 'right_shoulder_angle',
-                        'left_hip_angle', 'right_hip_angle',
-                        'left_knee_angle', 'right_knee_angle',
-                    ]
+                    # Only requires ONE SIDE to be visible: at least one hip and one knee
+                    left_hip = vis_dict.get('left_hip_angle', 0.0)
+                    right_hip = vis_dict.get('right_hip_angle', 0.0)
+                    left_knee = vis_dict.get('left_knee_angle', 0.0)
+                    right_knee = vis_dict.get('right_knee_angle', 0.0)
+
+                    hip_ok = (left_hip >= thresh) or (right_hip >= thresh)
+                    knee_ok = (left_knee >= thresh) or (right_knee >= thresh)
+                    return hip_ok and knee_ok
+
+                # If a custom set was provided, fall back to strict all-of requirement
                 for k in required_keys:
                     if vis_dict.get(k, 0.0) < thresh:
                         return False
                 return True
 
             vis_ok = body_fully_visible(vis) or (avg_vis and body_fully_visible(avg_vis))
+            # If still not ok and we're likely in a ground pose, try a looser threshold
+            # Ground poses: DownwardDog, Cobra often have lower shoulder visibility
+            if not vis_ok:
+                likely_label = buffer.get('current_label')
+                if buffer['smoothed_probs'] is not None:
+                    likely_label = model.classes_[int(np.argmax(buffer['smoothed_probs']))]
+                if likely_label in ('DownwardDog', 'Cobra'):
+                    loose_thresh = max(0.5, BODY_VIS_THRESH - 0.2)
+                    vis_ok = body_fully_visible(avg_vis or vis, thresh=loose_thresh)
 
             # Once buffer is full, make predictions
             if len(buffer['feature_buffer']) == buffer['feature_buffer'].maxlen and vis_ok:
@@ -274,7 +289,7 @@ def process_frame():
                     response['feedback_text'] = 'Please hold a pose'
             elif len(buffer['feature_buffer']) == buffer['feature_buffer'].maxlen and not vis_ok:
                 response['pose_text'] = 'Please put whole body in frame'
-                response['feedback_text'] = 'Ensure shoulders, hips, and knees are visible'
+                response['feedback_text'] = 'Ensure hips and knees are clearly visible'
                 response['has_pose'] = False
             else:
                 # Still filling buffer

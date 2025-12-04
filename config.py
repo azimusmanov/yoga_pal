@@ -15,7 +15,7 @@ MODEL_PATH = os.path.join(_ROOT, 'models', 'yoga_pose_model0.pkl')
 
 # Temporal filtering
 EMA_ALPHA = 0.2                    # EMA smoothing factor for probabilities (higher = smoother, slower to react)
-MIN_STABLE_SECONDS = 0.6           # Minimum consecutive seconds before switching displayed label
+MIN_STABLE_SECONDS = 0.75           # Minimum consecutive seconds before switching displayed label
 
 # Visibility gating
 BODY_VIS_THRESH = 0.7              # Minimum visibility for key joints to consider body fully in frame
