@@ -6,3 +6,7 @@ venv
 .venv
 venv312
 *.csv
+
+
+__pycache__
+.DS_Store
