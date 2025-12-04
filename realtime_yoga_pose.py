@@ -23,8 +23,6 @@ warnings.filterwarnings("ignore")
 
 # Configuration moved to config.py
 
-
-
 # Load the trained model
 if not os.path.exists(MODEL_PATH):
     print(f"Error: Model file '{MODEL_PATH}' not found!")
