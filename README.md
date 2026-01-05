@@ -2,8 +2,6 @@
 
 A real-time yoga pose estimation and feedback system using webcam, MediaPipe, and machine learning.
 
-## This is the final project for Northwestern course CS_396: Machine Learning and Sensing.
-
 ## By Shraeya Iyer, Azim Usmanov, Brendan Tan-Fahed, Irina Djuraskovirina
 
 ## Features
